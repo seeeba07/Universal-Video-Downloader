@@ -1,0 +1,17 @@
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+env/
+
+# PyInstaller build artifacts (do not upload these)
+build/
+dist/
+*.spec
+
+# Large binaries and tools (users should download these separately or use Releases)
+ffmpeg.exe
+ffprobe.exe
+*.ico
