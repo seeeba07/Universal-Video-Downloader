@@ -586,7 +586,7 @@ class MainWindow(QMainWindow):
             "<li><b>FPS:</b> Preferred framerate. If the specific FPS isn't available, the best alternative is selected.</li>"
             "<li><b>Subtitles:</b> If checked, attempts to download and embed subtitles (EN, CZ, SK, etc.).</li>"
             "<li><b>Cookies:</b> Borrow cookies from your browser to access age-restricted or premium content.</li>"
-            "<li><b>Quality / Size:</b> Final selection for video resolution or audio bitrate.</li>"
+            "<li><b>Quality:</b> Final selection for video resolution or audio bitrate.</li>"
             "</ul>"
             "<p><i>Note: FFmpeg is required for merging video and audio streams.</i></p>"
         )
