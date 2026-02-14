@@ -2,7 +2,7 @@
 
 > A sleek, modern desktop application for downloading videos and extracting audio from your favorite platforms.
 
-![Screenshot](screenshot.png)
+![UVD App Screenshot](assets/screenshot.png)
 
 ## About
 
@@ -13,23 +13,24 @@ The application features an intuitive graphical interface that simplifies the do
 ## Features
 
 ✨ **Core Functionality**
-- 🎬 Download videos in multiple formats and resolutions
-- 🎵 Extract audio with various codec options (MP3, M4A, FLAC, OPUS, WAV)
-- ⚙️ Fine-grained quality control (resolution, FPS, bitrate)
-- 📝 Automatic subtitle downloading and embedding
+- Download videos in multiple formats and resolutions
+- Extract audio with various codec options (MP3, M4A, FLAC, OPUS, WAV)
+- Fine-grained quality control (resolution, FPS)
+- Automatic subtitle downloading and embedding
+- System info display (FFmpeg status, yt-dlp version)
+- Smooth format/quality selection with dynamic filtering
+- Real-time progress tracking with download speed and size info
+- Disk space monitoring and custom download folder selection
 
 🔧 **Advanced Options**
-- 🔐 Browser cookie integration (Chrome, Edge, Firefox, Opera) for age-restricted content
-- 🎬 FFmpeg postprocessing for metadata and thumbnail embedding
-- 🔄 Network resilience with automatic retry and parallel fragment downloads
-- 📊 Real-time progress tracking with download speed and size info
-- 💾 Disk space monitoring and custom download folder selection
+- Browser cookie integration (Chrome, Edge, Firefox, Opera) for age-restricted content
+- FFmpeg postprocessing for metadata and thumbnail embedding
+
 
 🎨 **User Experience**
 - Dark, modern UI with responsive design
 - One-click folder access to downloaded files
-- System info display (FFmpeg status, yt-dlp version)
-- Smooth format/quality selection with dynamic filtering
+
 
 ## How to Use
 
@@ -38,10 +39,6 @@ The application features an intuitive graphical interface that simplifies the do
 1. **Download** the latest release from the [Releases](../../releases) page
 2. **Extract** the `.exe` file to your preferred location
 3. **Run** the application - no installation needed
-4. **Paste** a video URL into the input field
-5. **Click** "Fetch" to load video information
-6. **Adjust** your preferences (format, quality, subtitles, etc.)
-7. **Click** "DOWNLOAD" and enjoy
 
 ### 📋 Step-by-Step
 
@@ -52,7 +49,7 @@ The application features an intuitive graphical interface that simplifies the do
 | 3 | Choose between **Video** or **Audio** mode |
 | 4 | Select desired **Format** and **Quality** |
 | 5 | Optional: Enable subtitles and browser cookies |
-| 6 | Click "DOWNLOAD" to start |
+| 6 | Click "DOWNLOAD" |
 
 ### ⚙️ Settings Explained
 
@@ -62,6 +59,7 @@ The application features an intuitive graphical interface that simplifies the do
 - **Quality**: Resolution (video) or bitrate (audio)
 - **Subtitles**: Download and embed subtitles if available
 - **Cookies**: Borrow browser cookies for accessing restricted content
+- More in About (?)
 
 ## ⚠️ Signature Warning
 
@@ -69,12 +67,6 @@ This application is **not code-signed**. When you download and run the `.exe` fi
 
 ```
 Windows Defender SmartScreen has stopped an unrecognized app from starting
-```
-
-or
-
-```
-This app can't be opened
 ```
 
 **This is normal.** Code signing certificates are expensive and required for enterprise distributions. To bypass this warning:
@@ -91,7 +83,12 @@ The source code is publicly available on GitHub for your review and verification
 - **FFmpeg** (optional but recommended for best results)
   - Bundled in the portable package, or
   - Available via system PATH, or
-  - Download from [ffmpeg.org](https://ffmpeg.org/download.html)
+  - Download from:
+    [ffmpeg.org](https://ffmpeg.org/download.html)
+    or via cmd using winget:
+    ```
+    winget install ffmpeg
+    ```
 
 ## 📄 License
 
