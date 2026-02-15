@@ -275,7 +275,6 @@ class MainWindow(QMainWindow):
         
         self.btn_help = QPushButton("?")
         self.btn_help.setFixedSize(30, 30)
-        self.btn_help.setStyleSheet("QPushButton { border-radius: 15px; background-color: #555; font-weight: bold; font-size: 14px; } QPushButton:hover { background-color: #64b5f6; color: black; }")
         self.btn_help.clicked.connect(self.show_app_help)
 
         header_layout.addStretch()
@@ -408,22 +407,52 @@ class MainWindow(QMainWindow):
         layout.addLayout(btn_layout)
 
     def apply_stylesheet(self):
-        self.setStyleSheet("""
-            QMainWindow { background-color: #2b2b2b; }
-            QWidget { color: #ffffff; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
-            QLineEdit { background-color: #3a3a3a; border: 1px solid #555; border-radius: 4px; padding: 5px; color: white; }
-            QComboBox { background-color: #3a3a3a; border: 1px solid #555; border-radius: 4px; padding: 5px; color: white; }
-            QComboBox::drop-down { border: 0px; }
-            QPushButton { background-color: #444; border: 1px solid #555; border-radius: 4px; padding: 5px; }
-            QPushButton:hover { background-color: #555; }
-            QPushButton:disabled { background-color: #333; color: #777; }
-            QCheckBox { spacing: 8px; }
-            QCheckBox::indicator { width: 18px; height: 18px; border: 1px solid #555; border-radius: 3px; background: #3a3a3a; }
-            QCheckBox::indicator:checked { background-color: #64b5f6; border-color: #64b5f6; }
-            QProgressBar { border: 1px solid #444; border-radius: 4px; text-align: center; background-color: #333; }
-            QProgressBar::chunk { background-color: #1976d2; border-radius: 3px; }
-            QFrame#SettingsFrame { background-color: #333; border-radius: 8px; padding: 5px; }
-        """)
+        is_light_mode = self.palette().color(self.backgroundRole()).lightness() > 128
+    
+        if is_light_mode:
+            # Light mode colors
+            bg_color = "#f5f5f5"
+            text_color = "#000000"
+            border_color = "#cccccc"
+            input_bg = "#ffffff"
+            btn_bg = "#e1e1e1"
+            btn_hover = "#d4d4d4"   
+            btn_text = "#000000"
+        else:
+            # Dark mode colors
+            bg_color = "#2b2b2b"
+            text_color = "#ffffff"
+            border_color = "#555"
+            input_bg = "#3a3a3a"
+            btn_bg = "#444444"
+            btn_hover = "#555555"
+            btn_text = "#ffffff"
+
+        stylesheet = f"""
+            QMainWindow {{ background-color: {bg_color}; }}
+            QWidget {{ color: {text_color}; font-family: 'Segoe UI', sans-serif; font-size: 13px; }}
+            QMessageBox {{ background-color: {bg_color}; }}
+            QMessageBox QLabel {{ color: {text_color}; }}
+            QLineEdit {{ background-color: {input_bg}; border: 1px solid {border_color}; border-radius: 4px; padding: 5px; color: {text_color}; }}
+            QComboBox {{ background-color: {input_bg}; border: 1px solid {border_color}; border-radius: 4px; padding: 5px; color: {text_color}; }}
+            QComboBox::drop-down {{ border: 0px; }}
+            QPushButton {{ 
+                background-color: {btn_bg}; 
+                color: {btn_text};
+                border: 1px solid {border_color}; 
+                border-radius: 4px; 
+                padding: 5px; 
+                }}
+            QPushButton:hover {{background-color: {btn_hover}; }}
+            QPushButton:disabled {{background-color: {input_bg}; color: {border_color}; }}
+            QCheckBox {{ spacing: 8px; }}
+            QCheckBox::indicator {{ width: 18px; height: 18px; border: 1px solid {border_color}; border-radius: 3px; background: {input_bg}; }}
+            QCheckBox::indicator:checked {{ background-color: #64b5f6; border-color: #64b5f6; }}
+            QProgressBar {{ border: 1px solid {border_color}; border-radius: 4px; text-align: center; background-color: {input_bg}; }}
+            QProgressBar::chunk {{ background-color: #1976d2; border-radius: 3px; }}
+            QFrame#SettingsFrame {{ background-color: {bg_color}; border-radius: 8px; padding: 5px; }}
+        """
+        self.setStyleSheet(stylesheet)
 
     def on_url_change(self):
         self.fetch_timer.start(350)
