@@ -1,13 +1,13 @@
 import os
 import platform
 import subprocess
+import tempfile
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QButtonGroup,
-    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
 
 import yt_dlp.version
 
-from .config import AUDIO_FORMATS
+from .config import AUDIO_FORMATS, LANGUAGE_NAMES
 from .utils import get_disk_space, get_ffmpeg_location, resource_path
 from .workers import DownloadWorker, InfoWorker
 
@@ -47,6 +47,7 @@ class MainWindow(QMainWindow):
         self.download_folder = str(Path.home() / "Downloads")
         self.video_info = {}
         self.video_formats = []
+        self.subtitle_languages = []
 
         self.fetch_timer = QTimer()
         self.fetch_timer.setSingleShot(True)
@@ -59,6 +60,7 @@ class MainWindow(QMainWindow):
         self.apply_stylesheet()
         self.update_system_info()
         self.update_ui_state()
+        self.update_output_indicator()
 
     def setup_ui(self):
         main_widget = QWidget()
@@ -132,20 +134,17 @@ class MainWindow(QMainWindow):
         self.cb_fps.currentIndexChanged.connect(self.on_fps_changed)
         settings_layout.addWidget(self.cb_fps)
 
+        self.lbl_subtitles = QLabel("Subtitles:")
+        settings_layout.addWidget(self.lbl_subtitles)
+        self.cb_subtitles = QComboBox()
+        self.cb_subtitles.setFixedWidth(150)
+        self.cb_subtitles.currentIndexChanged.connect(self.update_output_indicator)
+        settings_layout.addWidget(self.cb_subtitles)
+        self.set_subtitle_options([])
+
         settings_layout.addSpacing(15)
 
-        self.cb_subtitles = QCheckBox("Subtitles")
-        self.cb_subtitles.setChecked(False)
-        self.cb_subtitles.setToolTip("Download and embed subtitles (if available)")
-        settings_layout.addWidget(self.cb_subtitles)
-
         settings_layout.addStretch()
-
-        settings_layout.addWidget(QLabel("Cookies:"))
-        self.cb_cookies = QComboBox()
-        self.cb_cookies.addItems(["None", "Chrome", "Edge", "Firefox", "Opera"])
-        self.cb_cookies.setFixedWidth(90)
-        settings_layout.addWidget(self.cb_cookies)
 
         layout.addWidget(settings_frame)
 
@@ -156,6 +155,11 @@ class MainWindow(QMainWindow):
         self.cb_quality.setEnabled(False)
         quality_layout.addWidget(self.cb_quality, 1)
         layout.addLayout(quality_layout)
+
+        self.lbl_output_indicator = QLabel("Output file: -")
+        self.lbl_output_indicator.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.lbl_output_indicator.setStyleSheet("color: #777; font-size: 11px;")
+        layout.addWidget(self.lbl_output_indicator)
 
         # Folder
         folder_layout = QHBoxLayout()
@@ -267,17 +271,16 @@ class MainWindow(QMainWindow):
         self.fetch_btn.setEnabled(False)
         self.btn_download.setEnabled(False)
 
-        cookies_val = self.cb_cookies.currentText().lower()
-        cookies = cookies_val if cookies_val != "none" else None
-
-        self.info_worker = InfoWorker(url, cookies)
+        self.info_worker = InfoWorker(url)
         self.info_worker.finished_signal.connect(self.on_info_fetched)
         self.info_worker.error_signal.connect(self.on_info_error)
         self.info_worker.start()
 
-    def on_info_fetched(self, info, formats):
+    def on_info_fetched(self, info, formats, subtitle_languages):
         self.video_info = info
         self.video_formats = formats
+        self.subtitle_languages = subtitle_languages
+        self.set_subtitle_options(subtitle_languages)
         self.lbl_status.setText(f"Loaded: {info.get('title')}")
         self.fetch_btn.setEnabled(True)
         self.update_ui_state()
@@ -285,6 +288,29 @@ class MainWindow(QMainWindow):
     def on_info_error(self, err):
         self.lbl_status.setText(f"Error: {err[:50]}...")
         self.fetch_btn.setEnabled(True)
+        self.subtitle_languages = []
+        self.set_subtitle_options([])
+
+    def set_subtitle_options(self, subtitle_languages):
+        self.cb_subtitles.blockSignals(True)
+        self.cb_subtitles.clear()
+        self.cb_subtitles.addItem("None", None)
+
+        if subtitle_languages:
+            self.cb_subtitles.addItem("All available", "__all__")
+            for lang in subtitle_languages:
+                self.cb_subtitles.addItem(self.get_language_display_name(lang), lang)
+
+        self.cb_subtitles.blockSignals(False)
+        self.update_output_indicator()
+
+    def get_language_display_name(self, language_code):
+        base_code = language_code.lower().split("-")[0].split("_")[0]
+        language_name = LANGUAGE_NAMES.get(base_code)
+
+        if language_name:
+            return f"{language_name} ({language_code})"
+        return language_code.upper()
 
     def update_ui_state(self):
         is_audio = self.rb_audio.isChecked()
@@ -300,7 +326,8 @@ class MainWindow(QMainWindow):
         if is_audio:
             self.lbl_fps.setVisible(False)
             self.cb_fps.setVisible(False)
-            self.cb_subtitles.setEnabled(False)
+            self.lbl_subtitles.setVisible(False)
+            self.cb_subtitles.setVisible(False)
             self.lbl_format.setText("Format:")
 
             self.cb_format.addItems(["mp3", "m4a", "wav", "flac", "opus"])
@@ -314,7 +341,8 @@ class MainWindow(QMainWindow):
         else:
             self.lbl_fps.setVisible(True)
             self.cb_fps.setVisible(True)
-            self.cb_subtitles.setEnabled(True)
+            self.lbl_subtitles.setVisible(True)
+            self.cb_subtitles.setVisible(True)
             self.lbl_format.setText("Format:")
 
             if self.video_formats:
@@ -329,6 +357,7 @@ class MainWindow(QMainWindow):
         self.cb_format.blockSignals(False)
         self.cb_fps.blockSignals(False)
         self.cb_quality.blockSignals(False)
+        self.update_output_indicator()
 
     def populate_video_formats(self):
         unique_formats = set()
@@ -369,6 +398,27 @@ class MainWindow(QMainWindow):
 
         self.cb_fps.blockSignals(False)
         self.on_fps_changed()
+        self.update_output_indicator()
+
+    def update_output_indicator(self):
+        if not hasattr(self, 'lbl_output_indicator'):
+            return
+
+        if self.rb_audio.isChecked():
+            audio_ext = self.cb_format.currentText() or "audio"
+            self.lbl_output_indicator.setText(f"Output file: .{audio_ext}")
+            self.lbl_output_indicator.setStyleSheet("color: #777; font-size: 11px;")
+            return
+
+        if self.cb_subtitles.currentData() is not None:
+            self.lbl_output_indicator.setText("Output file: .mkv (subtitles selected)")
+            self.lbl_output_indicator.setStyleSheet("color: #64b5f6; font-size: 11px;")
+            return
+
+        fmt_data = self.cb_format.currentData()
+        video_ext = fmt_data[0] if fmt_data else "mp4"
+        self.lbl_output_indicator.setText(f"Output file: .{video_ext}")
+        self.lbl_output_indicator.setStyleSheet("color: #777; font-size: 11px;")
 
     def on_fps_changed(self):
         self.cb_quality.blockSignals(True)
@@ -416,14 +466,15 @@ class MainWindow(QMainWindow):
             "<h3>App Features Guide</h3>"
             "<ul>"
             "<li><b>Fetch:</b> Retrieving video metadata from the provided URL.</li>"
-            "<li><b>Type (Video/Audio):</b> Switch between downloading video or extracting audio only.</li>"
-            "<li><b>Format:</b> Select specific video container and codec (e.g., MP4 with AVC1).</li>"
-            "<li><b>FPS:</b> Preferred framerate. If the specific FPS isn't available, the best alternative is selected.</li>"
-            "<li><b>Subtitles:</b> If checked, attempts to download and embed subtitles (EN, CZ, SK, etc.).</li>"
-            "<li><b>Cookies:</b> Borrow cookies from your browser to access age-restricted or premium content.</li>"
-            "<li><b>Quality:</b> Final selection for video resolution or audio bitrate.</li>"
+            "<li><b>Type (Video/Audio):</b> Choose full video download or audio extraction only.</li>"
+            "<li><b>Format:</b> Select preferred video codec/container or audio format.</li>"
+            "<li><b>FPS:</b> Choose framerate for video mode; quality list adapts to your selection.</li>"
+            "<li><b>Subtitles:</b> Embeds subtitles into the video (None, one language, or All available).</li>"
+            "<li><b>Quality:</b> Choose resolution (video) or bitrate (audio).</li>"
+            "<li><b>Output file:</b> Shows final extension. If subtitles are selected in video mode, output changes to <b>.mkv</b>.</li>"
+            "<li><b>Filename suffix:</b> Video files include selected resolution and codec at the end (for example [1920x1080 av01]).</li>"
             "</ul>"
-            "<p><i>Note: FFmpeg is required for merging video and audio streams.</i></p>"
+            "<p><i>Note: FFmpeg is recommended for best results and required for some post-processing actions.</i></p>"
         )
         QMessageBox.information(self, "App Help", help_text)
 
@@ -433,13 +484,9 @@ class MainWindow(QMainWindow):
             return
 
         is_audio = self.rb_audio.isChecked()
-        cookies_val = self.cb_cookies.currentText().lower()
-        cookies = cookies_val if cookies_val != "none" else None
-        download_subs = self.cb_subtitles.isChecked()
+        file_name_suffix = None
 
-        temp_dir = os.path.join(self.download_folder, "temp_download")
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir, exist_ok=True)
+        temp_dir = tempfile.mkdtemp(prefix="uvd_tmp_")
 
         ydl_opts = {
             'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
@@ -452,8 +499,6 @@ class MainWindow(QMainWindow):
         loc_ffmpeg = get_ffmpeg_location()
         if loc_ffmpeg:
             ydl_opts['ffmpeg_location'] = loc_ffmpeg
-        if cookies:
-            ydl_opts['cookiesfrombrowser'] = (cookies,)
 
         target_ext = "mp4"
 
@@ -474,33 +519,69 @@ class MainWindow(QMainWindow):
         else:
             selected_id = self.cb_quality.currentData()
             fmt_data = self.cb_format.currentData()
+            selected_subtitle = self.cb_subtitles.currentData()
 
             if selected_id and fmt_data:
                 target_ext = fmt_data[0]
+                selected_format = next(
+                    (f for f in self.video_formats if str(f.get('format_id')) == str(selected_id)),
+                    None,
+                )
 
-                ydl_opts['format'] = f"{selected_id}+bestaudio/best"
-                ydl_opts['merge_output_format'] = target_ext
-
-                pps = []
-                pps.append({'key': 'FFmpegMetadata', 'add_chapters': True})
-                pps.append({'key': 'EmbedThumbnail'})
-
-                pps_args = {}
-                if target_ext == 'mp4':
-                    pps_args = {'merger': ['-c:v', 'copy', '-c:a', 'aac']}
-
-                ydl_opts['postprocessors'] = pps
-                ydl_opts['postprocessor_args'] = pps_args
-
-                if download_subs:
-                    ydl_opts['writesubtitles'] = True
-                    ydl_opts['embedsubtitles'] = True
-                    ydl_opts['subtitleslangs'] = ['en.*', 'cs', 'sk', 'de', 'es']
+                if selected_format and selected_format.get('acodec') != 'none':
+                    ydl_opts['format'] = str(selected_id)
                 else:
-                    ydl_opts['writesubtitles'] = False
+                    if target_ext == 'mp4':
+                        audio_selector = 'bestaudio[ext=m4a]/bestaudio/best'
+                    elif target_ext == 'webm':
+                        audio_selector = 'bestaudio[ext=webm]/bestaudio/best'
+                    else:
+                        audio_selector = 'bestaudio/best'
+
+                    ydl_opts['format'] = f"{selected_id}+{audio_selector}"
+                    ydl_opts['merge_output_format'] = target_ext
+
+                if selected_format:
+                    width = selected_format.get('width')
+                    height = selected_format.get('height')
+                    resolution = f"{width}x{height}" if width and height else None
+
+                    codec = selected_format.get('vcodec_clean') or selected_format.get('vcodec')
+                    if codec and codec != 'none':
+                        codec = codec.split('.')[0]
+                    else:
+                        codec = None
+
+                    if resolution and codec:
+                        file_name_suffix = f"[{resolution} {codec}]"
+                    elif resolution:
+                        file_name_suffix = f"[{resolution}]"
+                    elif codec:
+                        file_name_suffix = f"[{codec}]"
             else:
                 ydl_opts['format'] = 'bestvideo+bestaudio/best'
                 ydl_opts['merge_output_format'] = 'mp4'
+
+            if selected_subtitle is not None:
+                target_ext = 'mkv'
+                ydl_opts['merge_output_format'] = 'mkv'
+                ydl_opts['writesubtitles'] = True
+                ydl_opts['embedsubtitles'] = True
+                ydl_opts['writeautomaticsub'] = False
+                ydl_opts['subtitlesformat'] = 'srt/best'
+                ydl_opts['convertsubtitles'] = 'srt'
+                ydl_opts['keepvideo'] = True
+                ydl_opts['compat_opts'] = ['no-keep-subs']
+
+                postprocessors = ydl_opts.setdefault('postprocessors', [])
+                postprocessors.append({'key': 'FFmpegMetadata', 'add_chapters': True})
+                postprocessors.append({'key': 'EmbedThumbnail'})
+                postprocessors.append({'key': 'FFmpegEmbedSubtitle'})
+
+                if selected_subtitle == "__all__":
+                    ydl_opts['subtitleslangs'] = self.subtitle_languages
+                else:
+                    ydl_opts['subtitleslangs'] = [selected_subtitle]
 
         self.btn_download.setEnabled(False)
         self.btn_cancel.setEnabled(True)
@@ -509,7 +590,7 @@ class MainWindow(QMainWindow):
         self.lbl_status.setText("Starting download...")
         self.lbl_status.setStyleSheet("")
 
-        self.download_worker = DownloadWorker(url, ydl_opts, temp_dir, target_ext, self.download_folder)
+        self.download_worker = DownloadWorker(url, ydl_opts, temp_dir, target_ext, self.download_folder, file_name_suffix)
         self.download_worker.progress_signal.connect(self.update_progress)
         self.download_worker.finished_signal.connect(self.on_download_finished)
         self.download_worker.error_signal.connect(self.on_download_error)

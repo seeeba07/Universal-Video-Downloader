@@ -14,13 +14,12 @@ from .utils import format_size
 
 # InfoWorker: Fetches video info with optimized yt-dlp options for speed.
 class InfoWorker(QThread):
-    finished_signal = pyqtSignal(dict, list)
+    finished_signal = pyqtSignal(dict, list, list)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, url, cookies=None):
+    def __init__(self, url):
         super().__init__()
         self.url = url
-        self.cookies = cookies
 
     def run(self):
         ydl_opts = {
@@ -29,8 +28,6 @@ class InfoWorker(QThread):
             'noplaylist': True,
             'extract_flat': False,
         }
-        if self.cookies:
-            ydl_opts['cookiesfrombrowser'] = (self.cookies,)
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -39,7 +36,10 @@ class InfoWorker(QThread):
 
                 clean_formats = []
                 for f in formats:
-                    if f.get('vcodec') != 'none' and f.get('height'):
+                    if (
+                        f.get('vcodec') != 'none'
+                        and f.get('height')
+                    ):
 
                         fps = f.get('fps')
                         if fps:
@@ -60,7 +60,13 @@ class InfoWorker(QThread):
                     reverse=True,
                 )
 
-                self.finished_signal.emit(info, clean_formats)
+                manual_subtitles = info.get('subtitles', {}) or {}
+                subtitle_languages = sorted([
+                    lang for lang, entries in manual_subtitles.items()
+                    if entries
+                ])
+
+                self.finished_signal.emit(info, clean_formats, subtitle_languages)
         except Exception as e:
             self.error_signal.emit(str(e))
 
@@ -71,13 +77,14 @@ class DownloadWorker(QThread):
     finished_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, url, opts, temp_dir, target_ext, download_folder):
+    def __init__(self, url, opts, temp_dir, target_ext, download_folder, file_name_suffix=None):
         super().__init__()
         self.url = url
         self.opts = opts
         self.temp_dir = temp_dir
         self.target_ext = target_ext
         self.download_folder = download_folder
+        self.file_name_suffix = file_name_suffix
         self.is_cancelled = False
 
     def run(self):
@@ -117,13 +124,24 @@ class DownloadWorker(QThread):
                 if os.path.exists(final_path):
                     os.remove(final_path)
                 shutil.move(target, final_path)
-                self.finished_signal.emit("✅ DONE! File saved.")
+
+                if self.file_name_suffix:
+                    base_name, ext = os.path.splitext(os.path.basename(final_path))
+                    safe_suffix = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', self.file_name_suffix).strip().rstrip('.')
+                    if safe_suffix and not base_name.endswith(safe_suffix):
+                        renamed_file_name = f"{base_name} {safe_suffix}{ext}"
+                        renamed_path = os.path.join(self.download_folder, renamed_file_name)
+                        if os.path.exists(renamed_path):
+                            os.remove(renamed_path)
+                        os.replace(final_path, renamed_path)
+
+                self.finished_signal.emit("DONE! File saved.")
             else:
                 self.error_signal.emit("Error: File not found.")
 
         except Exception as e:
             if self.is_cancelled:
-                self.error_signal.emit("⛔ Cancelled.")
+                self.error_signal.emit("Cancelled.")
             else:
                 self.error_signal.emit(f"Error: {str(e)[:100]}...")
         finally:

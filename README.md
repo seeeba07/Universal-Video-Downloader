@@ -11,11 +11,10 @@ The application features an intuitive graphical interface that simplifies the do
 ## Features
 
 - Download videos in available formats and resolutions
-- Extract audio(MP3, M4A, FLAC, OPUS, WAV)
+- Extract audio (MP3, M4A, FLAC, OPUS, WAV)
 - Ability to choose preferred framerate (if available)
 - System info display (FFmpeg status, yt-dlp version, disk space)
 - Customizable save location
-- Browser cookie integration (Chrome, Edge, Firefox, Opera) for age-restricted content
 
 ## How to Use
 
@@ -31,8 +30,7 @@ The application features an intuitive graphical interface that simplifies the do
 2. Click "Fetch" to retrieve available formats
 3. Choose between **Video** or **Audio** mode
 4. Select desired **Format** and **Quality**
-5. Optional: Enable subtitles and browser cookies
-6. Click "DOWNLOAD"
+5. Click "DOWNLOAD"
 
 ### Settings Explained
 
@@ -53,7 +51,7 @@ Windows Defender SmartScreen prevents an unrecognized app from starting. Running
 3. The application will launch normally
 
 ## Compiling from Source
-If you want to compile the application yourself, make sure you have Python and PyInstaller installed, then run:
+If you want to compile the application yourself, download the `uvd.spec` file and make sure you have Python and PyInstaller installed, then run:
 
 ```bash
 pyinstaller --clean uvd.spec
