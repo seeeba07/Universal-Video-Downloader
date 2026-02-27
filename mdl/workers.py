@@ -78,7 +78,7 @@ class DownloadWorker(QThread):
     finished_signal = pyqtSignal(str)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, url, opts, temp_dir, target_ext, download_folder, file_name_suffix=None):
+    def __init__(self, url, opts, temp_dir, target_ext, download_folder, file_name_suffix=None, playlist_mode=False):
         super().__init__()
         self.url = url
         self.opts = opts
@@ -86,6 +86,7 @@ class DownloadWorker(QThread):
         self.target_ext = target_ext
         self.download_folder = download_folder
         self.file_name_suffix = file_name_suffix
+        self.playlist_mode = playlist_mode
         self.is_cancelled = False
         self._last_progress_emit_time = 0.0
         self._last_progress_percent = -1.0
@@ -110,9 +111,17 @@ class DownloadWorker(QThread):
                 self.error_signal.emit("⛔ Cancelled.")
                 return
 
+            if self.playlist_mode:
+                self.finished_signal.emit("DONE! Playlist saved.")
+                return
+
             target = None
             largest_file = None
             largest_size = -1
+
+            if not self.temp_dir or not os.path.isdir(self.temp_dir):
+                self.error_signal.emit("Error: Temporary folder missing.")
+                return
 
             with os.scandir(self.temp_dir) as entries:
                 for entry in entries:
@@ -163,7 +172,8 @@ class DownloadWorker(QThread):
                 self.error_signal.emit(f"Error: {str(e)[:100]}...")
         finally:
             try:
-                shutil.rmtree(self.temp_dir)
+                if self.temp_dir and os.path.isdir(self.temp_dir):
+                    shutil.rmtree(self.temp_dir)
             except Exception:
                 pass
 
