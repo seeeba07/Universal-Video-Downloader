@@ -4,8 +4,6 @@ import shutil
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-import yt_dlp
-
 from .utils import format_size
 
 
@@ -22,6 +20,8 @@ class InfoWorker(QThread):
         self.url = url
 
     def run(self):
+        import yt_dlp
+
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
@@ -88,6 +88,8 @@ class DownloadWorker(QThread):
         self.is_cancelled = False
 
     def run(self):
+        import yt_dlp
+
         self.opts.update({
             'progress_hooks': [self.progress_hook],
             'retries': 10,

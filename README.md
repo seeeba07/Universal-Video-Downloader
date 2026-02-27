@@ -53,8 +53,34 @@ Windows Defender SmartScreen prevents an unrecognized app from starting. Running
 If you want to compile the application yourself, download the `mdl.spec` file and make sure you have Python and PyInstaller installed, then run:
 
 ```bash
-pyinstaller --clean mdl.spec
+pyinstaller --clean --noconfirm mdl.spec
 ```
+
+## One-Click Build (Portable + Installer)
+
+Use `builds.bat` for a full build in one click.
+
+What it does automatically:
+- creates portable ZIP: `dist/media_downloader_portable_<version>.zip`
+- builds installer EXE: `dist/media_downloader_setup_<version>.exe`
+
+Version behavior:
+- `builds.bat` uses the current version from `VERSION.txt` (no bump)
+- `builds.bat bump` increments version first, then builds (release mode)
+
+### Requirements
+
+- Python environment with dependencies from `requirements.txt`
+- PyInstaller installed
+- [Inno Setup 6](https://jrsoftware.org/isinfo.php) installed (for installer build) 
+
+### Usage
+
+1. For normal/team build: run `builds.bat`
+2. For release build (version bump): run `builds.bat bump`
+3. Wait for build to finish and find outputs in `dist/`
+
+If Inno Setup is not installed, the script still builds the portable version and shows a warning.
 
 ## System Requirements
 

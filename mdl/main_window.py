@@ -22,9 +22,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-import yt_dlp.version
-
 from .config import AUDIO_FORMATS, LANGUAGE_NAMES
 from .utils import get_disk_space, get_ffmpeg_location, resource_path
 from .workers import DownloadWorker, InfoWorker
@@ -622,6 +619,8 @@ class MainWindow(QMainWindow):
             self.download_worker.cancel()
 
     def update_system_info(self):
+        import yt_dlp.version
+
         ffmpeg_loc = get_ffmpeg_location()
         disk = get_disk_space(self.download_folder)
         ver = yt_dlp.version.__version__
