@@ -8,16 +8,7 @@ if not exist VERSION.txt (
 	echo 1.2>VERSION.txt
 )
 
-set "DO_BUMP=0"
-if /I "%~1"=="bump" set "DO_BUMP=1"
-
-if "%DO_BUMP%"=="1" (
-	echo Release mode: bumping version...
-	powershell -NoProfile -ExecutionPolicy Bypass -Command "$path='VERSION.txt'; $raw=((Get-Content -Path $path -Raw) -as [string]).Trim(); if([string]::IsNullOrWhiteSpace($raw)){$raw='1.2'}; if($raw -match '^(\d+)\.(\d+)$'){ $next='{0}.{1}' -f $Matches[1],([int]$Matches[2]+1) } elseif($raw -match '^(\d+)\.(\d+)\.(\d+)$'){ $next='{0}.{1}.{2}' -f $Matches[1],$Matches[2],([int]$Matches[3]+1) } else { $next='1.3' }; Set-Content -Path $path -Value $next -NoNewline"
-	if errorlevel 1 goto :build_error
-) else (
-	echo Build mode: using current VERSION.txt without bump.
-)
+echo Build mode: using current VERSION.txt value.
 
 set "APP_VERSION="
 set /p APP_VERSION=<VERSION.txt
