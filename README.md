@@ -58,15 +58,11 @@ pyinstaller --clean --noconfirm mdl.spec
 
 ## One-Click Build (Portable + Installer)
 
-Use `builds.bat` for a full build in one click.
+Use `builds.bat` for a full build in one click using version from `VERSION.txt`.
 
 What it does automatically:
 - creates portable ZIP: `dist/media_downloader_portable_<version>.zip`
 - builds installer EXE: `dist/media_downloader_setup_<version>.exe`
-
-Version behavior:
-- `builds.bat` uses the current version from `VERSION.txt` (no bump)
-- `builds.bat bump` increments version first, then builds (release mode)
 
 ### Requirements
 
