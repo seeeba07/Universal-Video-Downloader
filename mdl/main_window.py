@@ -61,11 +61,13 @@ class MainWindow(QMainWindow):
         self.update_output_indicator()
 
     def setup_ui(self):
+        control_height = 40
+
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         layout = QVBoxLayout(main_widget)
-        layout.setSpacing(12)
-        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+        layout.setContentsMargins(24, 20, 24, 20)
 
         # Header
         header_layout = QHBoxLayout()
@@ -87,11 +89,11 @@ class MainWindow(QMainWindow):
         url_layout = QHBoxLayout()
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Paste link (URL) - Ctrl+V")
-        self.url_input.setMinimumHeight(40)
+        self.url_input.setMinimumHeight(control_height)
         self.url_input.textChanged.connect(self.on_url_change)
 
         self.fetch_btn = QPushButton("Fetch")
-        self.fetch_btn.setMinimumHeight(40)
+        self.fetch_btn.setMinimumHeight(control_height)
         self.fetch_btn.setFixedWidth(100)
         self.fetch_btn.clicked.connect(self.start_fetch_info)
 
@@ -103,7 +105,8 @@ class MainWindow(QMainWindow):
         settings_frame = QFrame()
         settings_frame.setObjectName("SettingsFrame")
         settings_layout = QHBoxLayout(settings_frame)
-        settings_layout.setContentsMargins(10, 10, 10, 10)
+        settings_layout.setContentsMargins(12, 10, 12, 10)
+        settings_layout.setSpacing(10)
 
         self.rb_group = QButtonGroup()
         self.rb_video = QRadioButton("Video")
@@ -121,21 +124,24 @@ class MainWindow(QMainWindow):
         self.lbl_format = QLabel("Format:")
         settings_layout.addWidget(self.lbl_format)
         self.cb_format = QComboBox()
-        self.cb_format.setFixedWidth(130)
+        self.cb_format.setMinimumHeight(control_height - 2)
+        self.cb_format.setFixedWidth(150)
         self.cb_format.currentIndexChanged.connect(self.on_format_changed)
         settings_layout.addWidget(self.cb_format)
 
         self.lbl_fps = QLabel("FPS:")
         settings_layout.addWidget(self.lbl_fps)
         self.cb_fps = QComboBox()
-        self.cb_fps.setFixedWidth(60)
+        self.cb_fps.setMinimumHeight(control_height - 2)
+        self.cb_fps.setFixedWidth(72)
         self.cb_fps.currentIndexChanged.connect(self.on_fps_changed)
         settings_layout.addWidget(self.cb_fps)
 
         self.lbl_subtitles = QLabel("Subtitles:")
         settings_layout.addWidget(self.lbl_subtitles)
         self.cb_subtitles = QComboBox()
-        self.cb_subtitles.setFixedWidth(150)
+        self.cb_subtitles.setMinimumHeight(control_height - 2)
+        self.cb_subtitles.setFixedWidth(180)
         self.cb_subtitles.currentIndexChanged.connect(self.update_output_indicator)
         settings_layout.addWidget(self.cb_subtitles)
         self.set_subtitle_options([])
@@ -150,22 +156,26 @@ class MainWindow(QMainWindow):
         quality_layout = QHBoxLayout()
         quality_layout.addWidget(QLabel("Quality:"))
         self.cb_quality = QComboBox()
+        self.cb_quality.setMinimumHeight(control_height - 2)
         self.cb_quality.setEnabled(False)
         quality_layout.addWidget(self.cb_quality, 1)
         layout.addLayout(quality_layout)
 
         self.lbl_output_indicator = QLabel("Output file: -")
         self.lbl_output_indicator.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.lbl_output_indicator.setStyleSheet("color: #777; font-size: 11px;")
+        self.lbl_output_indicator.setStyleSheet("color: #8a8a8a; font-size: 11px;")
         layout.addWidget(self.lbl_output_indicator)
 
         # Folder
         folder_layout = QHBoxLayout()
         self.btn_open_folder = QPushButton("📂 Open")
+        self.btn_open_folder.setMinimumHeight(control_height)
         self.btn_open_folder.clicked.connect(self.open_folder)
         self.lbl_folder = QLineEdit(self.download_folder)
+        self.lbl_folder.setMinimumHeight(control_height)
         self.lbl_folder.setReadOnly(True)
         self.btn_change_folder = QPushButton("Change")
+        self.btn_change_folder.setMinimumHeight(control_height)
         self.btn_change_folder.clicked.connect(self.change_folder)
         folder_layout.addWidget(self.btn_open_folder)
         folder_layout.addWidget(self.lbl_folder)
@@ -175,11 +185,12 @@ class MainWindow(QMainWindow):
         # Status
         self.lbl_system_info = QLabel("Loading info...")
         self.lbl_system_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_system_info.setStyleSheet("color: #777; font-size: 11px;")
+        self.lbl_system_info.setStyleSheet("color: #8a8a8a; font-size: 11px;")
         layout.addWidget(self.lbl_system_info)
 
         self.lbl_status = QLabel("Ready")
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600;")
         layout.addWidget(self.lbl_status)
 
         # Progress
@@ -194,13 +205,13 @@ class MainWindow(QMainWindow):
         btn_layout = QHBoxLayout()
         self.btn_download = QPushButton("DOWNLOAD")
         self.btn_download.setMinimumHeight(50)
-        self.btn_download.setStyleSheet("background-color: #2e7d32; color: white; font-weight: bold; font-size: 14px; border-radius: 5px;")
+        self.btn_download.setStyleSheet("background-color: #2f8a3a; color: white; font-weight: bold; font-size: 14px; border-radius: 6px;")
         self.btn_download.clicked.connect(self.start_download)
         self.btn_download.setEnabled(False)
 
         self.btn_cancel = QPushButton("CANCEL")
         self.btn_cancel.setMinimumHeight(50)
-        self.btn_cancel.setStyleSheet("background-color: #c62828; color: white; font-weight: bold; font-size: 14px; border-radius: 5px;")
+        self.btn_cancel.setStyleSheet("background-color: #b63a3a; color: white; font-weight: bold; font-size: 14px; border-radius: 6px;")
         self.btn_cancel.clicked.connect(self.cancel_download)
         self.btn_cancel.setEnabled(False)
 
