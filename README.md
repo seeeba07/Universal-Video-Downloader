@@ -72,9 +72,8 @@ What it does automatically:
 
 ### Usage
 
-1. For normal/team build: run `builds.bat`
-2. For release build (version bump): run `builds.bat bump`
-3. Wait for build to finish and find outputs in `dist/`
+1. Run `builds.bat`
+2. Wait for build to finish and find outputs in `dist/`
 
 If Inno Setup is not installed, the script still builds the portable version and shows a warning.
 
