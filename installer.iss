@@ -18,6 +18,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=dist
 OutputBaseFilename=media_downloader_setup_{#MyAppVersion}
+SetupIconFile=assets\icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

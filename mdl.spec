@@ -5,7 +5,7 @@ a = Analysis(
     ['mdl\\app.py'],
     pathex=[],
     binaries=[('ffmpeg.exe', '.'), ('ffprobe.exe', '.')],
-    datas=[('icon.ico', '.'), ('VERSION.txt', '.')],
+    datas=[('assets\\icon.ico', 'assets'), ('VERSION.txt', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -33,7 +33,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['icon.ico'],
+    icon=['assets\\icon.ico'],
 )
 
 coll = COLLECT(

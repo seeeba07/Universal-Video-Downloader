@@ -38,7 +38,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Media Downloader")
         self.setFixedSize(850, 520)
 
-        icon_path = resource_path("icon.ico")
+        icon_path = resource_path("assets/icon.ico")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
 
