@@ -1,10 +1,12 @@
 import os
 import re
 import shutil
+import sys
 import time
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from .logger import logger
 from .utils import format_size
 
 
@@ -13,7 +15,7 @@ from .utils import format_size
 
 # InfoWorker: Fetches video info with optimized yt-dlp options for speed.
 class InfoWorker(QThread):
-    finished_signal = pyqtSignal(dict, list, list)
+    finished_signal = pyqtSignal(dict, list, list, list)
     error_signal = pyqtSignal(str)
 
     def __init__(self, url):
@@ -67,8 +69,15 @@ class InfoWorker(QThread):
                     if entries
                 ])
 
-                self.finished_signal.emit(info, clean_formats, subtitle_languages)
+                automatic_subtitles = info.get('automatic_captions', {}) or {}
+                auto_subtitle_languages = sorted([
+                    lang for lang, entries in automatic_subtitles.items()
+                    if entries
+                ])
+
+                self.finished_signal.emit(info, clean_formats, subtitle_languages, auto_subtitle_languages)
         except Exception as e:
+            logger.error("Failed to fetch media info for URL: %s", self.url, exc_info=True)
             self.error_signal.emit(str(e))
 
 # DownloadWorker: Handles the download process with robust error handling and progress reporting.
@@ -108,6 +117,7 @@ class DownloadWorker(QThread):
                 ydl.download([self.url])
 
             if self.is_cancelled:
+                logger.info("Download cancelled by user: %s", self.url)
                 self.error_signal.emit("⛔ Cancelled.")
                 return
 
@@ -167,8 +177,10 @@ class DownloadWorker(QThread):
 
         except Exception as e:
             if self.is_cancelled:
+                logger.info("Download cancelled during processing: %s", self.url)
                 self.error_signal.emit("Cancelled.")
             else:
+                logger.error("Download failed for URL: %s", self.url, exc_info=True)
                 self.error_signal.emit(f"Error: {str(e)[:100]}...")
         finally:
             try:
@@ -202,13 +214,53 @@ class DownloadWorker(QThread):
 
                 # Clean up ANSI codes
                 spd = re.sub(r'\x1b\[[0-9;]*m', '', d.get('_speed_str', 'N/A'))
+                eta = re.sub(r'\x1b\[[0-9;]*m', '', d.get('_eta_str', ''))
+                eta = eta.strip() or 'N/A'
 
-                msg = f"Downloading: {format_size(downloaded)} / {format_size(total)} | {spd}"
+                msg = f"Downloading: {format_size(downloaded)} / {format_size(total)} | {spd} | ETA: {eta}"
                 self.progress_signal.emit(percent, msg)
             except Exception:
-                pass
+                logger.debug("Suppressed exception in progress hook while emitting progress.", exc_info=True)
         elif status == 'finished':
             self.progress_signal.emit(100, "Processing / Converting...")
 
     def cancel(self):
         self.is_cancelled = True
+
+
+class UpdateWorker(QThread):
+    finished_signal = pyqtSignal(str)
+    error_signal = pyqtSignal(str)
+
+    def run(self):
+        import importlib
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-U", "yt-dlp"],
+                capture_output=True,
+                text=True,
+            )
+
+            combined_output = f"{result.stdout or ''}\n{result.stderr or ''}"
+
+            if result.returncode != 0:
+                err_output = (combined_output or "Unknown update error").strip()
+                self.error_signal.emit(err_output)
+                return
+
+            import yt_dlp.version as ytdlp_version
+
+            importlib.reload(ytdlp_version)
+            new_version = ytdlp_version.__version__
+
+            normalized_output = combined_output.lower()
+            already_latest = "requirement already satisfied" in normalized_output or "already up-to-date" in normalized_output
+
+            if already_latest:
+                self.finished_signal.emit(f"yt-dlp is already up to date (version {new_version}).")
+            else:
+                self.finished_signal.emit(f"yt-dlp updated successfully to version {new_version}.")
+        except Exception as e:
+            self.error_signal.emit(str(e))
