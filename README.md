@@ -90,12 +90,15 @@ If Inno Setup is not installed, the script still builds the portable version and
     ```
 
 
-## License: [MIT License](LICENSE)
+## License: [GNU GPL v3](LICENSE)
 
-You are free to:
-- Use for personal and commercial purposes
-- Modify and distribute
-- Include in other projects
+This project is licensed under the **GNU General Public License v3.0**.
+
+You can:
+- Use, study, and modify the software
+- Redistribute copies and modified versions
+
+Under GPL v3 terms, redistributed versions must also remain under GPL-compatible terms and include source availability obligations.
 
 ## Credits
 
