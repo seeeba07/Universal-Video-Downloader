@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+from .logger import logger
 
 # Utility functions for Media Downloader, including FFmpeg location and size formatting.
 
@@ -26,15 +27,18 @@ def get_ffmpeg_location():
         bundled = os.path.join(sys._MEIPASS, "ffmpeg.exe")
         if os.path.exists(bundled):
             _CACHED_FFMPEG = bundled
+            logger.debug("FFmpeg location resolved (bundled): %s", bundled)
             return bundled
 
     local = os.path.join(os.getcwd(), "ffmpeg.exe")
     if os.path.exists(local):
         _CACHED_FFMPEG = local
+        logger.debug("FFmpeg location resolved (local cwd): %s", local)
         return local
 
     if shutil.which("ffmpeg"):
         _CACHED_FFMPEG = None
+        logger.debug("FFmpeg location resolved via PATH")
         return None
 
     paths = [
@@ -44,9 +48,11 @@ def get_ffmpeg_location():
     for p in paths:
         if os.path.exists(p):
             _CACHED_FFMPEG = p
+            logger.debug("FFmpeg location resolved (fallback path): %s", p)
             return p
 
     _CACHED_FFMPEG = False
+    logger.debug("FFmpeg location resolved: missing")
     return False
 
 # Function to format byte sizes into human-readable strings
@@ -65,4 +71,5 @@ def get_disk_space(path):
         total, used, free = shutil.disk_usage(path)
         return format_size(free) + " free"
     except Exception:
+        logger.warning("Failed to check disk space for path: %s", path, exc_info=True)
         return "Disk unknown"
