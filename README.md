@@ -10,48 +10,67 @@
 
 - Download videos in available formats and resolutions
 - Extract audio (MP3, M4A, FLAC, OPUS, WAV)
-- Ability to choose preferred framerate (if available)
+- Choose preferred framerate (if available)
+- ETA in download progress display
 - System info display (FFmpeg status, yt-dlp version, disk space, app version)
 - Customizable save location
-- Subtitle downloading (if available)
+- Subtitle downloading (manual + optional auto-generated subtitles)
 - Playlist downloading support
+- Built-in yt-dlp updater
+- Settings dialog for defaults, theme, download behavior, and maintenance actions
 
 ## How to Use
 
 ### Getting Started
 
 1. **Download** the latest release from the [Releases](../../releases) page
-2. **Extract** the `.exe` file to your preferred location
-3. **Run** the application - no installation needed
+2. **Run** the setup file (`media_downloader_setup_<version>.exe`)
+3. Complete the installer and launch **Media Downloader**
 
 ### Downloading Videos
 
 1. Paste a video link from any supported platform
-2. Click "Fetch" to retrieve available formats
+2. Click **Fetch** to load video information and available formats
 3. Choose between **Video** or **Audio** mode
 4. Select desired **Format** and **Quality**
-5. Click "DOWNLOAD"
+5. Click **DOWNLOAD**
 
 ### Settings Explained
 
-- Click the "?" for detailed explanations of each setting.
+- Click the **?** button to see what each function does.
+- Click the **⚙** button in the top-right corner to open Settings.
+- Available options include:
+  - Theme: **System (auto)** / **Dark** / **Light**
+  - Default folder, mode, audio format, and bitrate
+  - Auto-paste URL from clipboard on focus
+  - Completion notification toggle
+  - Download speed limit (KB/s)
+  - Include auto-generated subtitles
+  - Maintenance tools: update yt-dlp, open/clear logs
+
+### Data & Logs
+
+The app stores local runtime data in:
+
+- `~/.media_downloader/logs/app.log`
+- `~/.media_downloader/settings/settings.ini`
 
 ## Signature Warning
 
-This application is **not code-signed**. When you download and run the `.exe` file, Windows may display security warnings such as:
+This application is **not code-signed**. When you run the setup or app executable, Windows may display security warnings such as:
 
 ```
 Windows Defender SmartScreen prevents an unrecognized app from starting. Running this app might put your PC at risk.
 ```
 
-**This is normal.** Code signing certificates are expensive and I'm not paying for that. To continue:
+**This is normal** for unsigned apps. To continue:
 
 1. Click **"More info"** 
 2. Click **"Run anyway"**
-3. The application will launch normally
+3. The installation or app will proceed as normal.
 
 ## Compiling from Source
-If you want to compile the application yourself, download the `mdl.spec` file and make sure you have Python and PyInstaller installed, then run:
+From the project root, make sure dependencies are installed and run:
 
 ```bash
 pyinstaller --clean --noconfirm mdl.spec
@@ -73,15 +92,15 @@ What it does automatically:
 
 ### Usage
 
-1. Run `builds.bat`
+1. Run `builds.bat` from the project root
 2. Wait for build to finish and find outputs in `dist/`
 
-If Inno Setup is not installed, the script still builds the portable version and shows a warning.
+If Inno Setup is not installed, the script still builds the portable ZIP and shows a warning.
 
 ## System Requirements
 
 - **FFmpeg** (optional but recommended for best results)
-  - Bundled in the portable package, or
+  - Bundled with release builds, or
   - Download from:
     [ffmpeg.org](https://ffmpeg.org/download.html)
     or via cmd using winget:
