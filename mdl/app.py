@@ -24,6 +24,7 @@ def main():
 
     exit_code = 1
     try:
+        QApplication.setQuitOnLastWindowClosed(False)
         app = QApplication(sys.argv)
         window = MainWindow()
         window.show()

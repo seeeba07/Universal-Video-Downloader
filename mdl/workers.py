@@ -99,6 +99,51 @@ class DownloadWorker(QThread):
         self.is_cancelled = False
         self._last_progress_emit_time = 0.0
         self._last_progress_percent = -1.0
+        self._started_at = time.time()
+
+    def _safe_suffix(self):
+        if not self.file_name_suffix:
+            return ""
+        return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', self.file_name_suffix).strip().rstrip('.')
+
+    def _apply_suffix_to_file(self, file_path):
+        if not self.file_name_suffix or not file_path:
+            return
+        if not os.path.isfile(file_path):
+            return
+
+        base_name, ext = os.path.splitext(os.path.basename(file_path))
+        safe_suffix = self._safe_suffix()
+        if not safe_suffix or base_name.endswith(safe_suffix):
+            return
+
+        renamed_file_name = f"{base_name} {safe_suffix}{ext}"
+        renamed_path = os.path.join(os.path.dirname(file_path), renamed_file_name)
+        if os.path.exists(renamed_path):
+            os.remove(renamed_path)
+        os.replace(file_path, renamed_path)
+
+    def _apply_suffix_to_recent_playlist_files(self):
+        if not self.file_name_suffix or not self.playlist_mode:
+            return
+
+        expected_ext = f".{str(self.target_ext or '').lower().lstrip('.')}"
+        if expected_ext == ".":
+            return
+
+        cutoff = self._started_at - 2.0
+        for root, _, files in os.walk(self.download_folder):
+            for name in files:
+                file_path = os.path.join(root, name)
+                _, ext = os.path.splitext(name)
+                if ext.lower() != expected_ext:
+                    continue
+                try:
+                    if os.path.getmtime(file_path) < cutoff:
+                        continue
+                except OSError:
+                    continue
+                self._apply_suffix_to_file(file_path)
 
     def run(self):
         import yt_dlp
@@ -122,6 +167,7 @@ class DownloadWorker(QThread):
                 return
 
             if self.playlist_mode:
+                self._apply_suffix_to_recent_playlist_files()
                 self.finished_signal.emit("DONE! Playlist saved.")
                 return
 
@@ -162,14 +208,7 @@ class DownloadWorker(QThread):
                 shutil.move(target, final_path)
 
                 if self.file_name_suffix:
-                    base_name, ext = os.path.splitext(os.path.basename(final_path))
-                    safe_suffix = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', self.file_name_suffix).strip().rstrip('.')
-                    if safe_suffix and not base_name.endswith(safe_suffix):
-                        renamed_file_name = f"{base_name} {safe_suffix}{ext}"
-                        renamed_path = os.path.join(self.download_folder, renamed_file_name)
-                        if os.path.exists(renamed_path):
-                            os.remove(renamed_path)
-                        os.replace(final_path, renamed_path)
+                    self._apply_suffix_to_file(final_path)
 
                 self.finished_signal.emit("DONE! File saved.")
             else:

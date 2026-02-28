@@ -21,13 +21,17 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QRadioButton,
+    QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
 from .config import AUDIO_FORMATS, LANGUAGE_NAMES
 from .logger import logger
+from .queue_manager import QueueManager
+from .queue_widget import QueueWidget
 from .settings_dialog import SettingsDialog
 from .settings_manager import SettingsManager
+from .tray_manager import TrayManager
 from .theme import get_theme_colors
 from .utils import get_disk_space, get_ffmpeg_location, resource_path
 from .workers import DownloadWorker, InfoWorker
@@ -41,7 +45,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Media Downloader")
-        self.setFixedSize(850, 520)
+        self._collapsed_size = (850, 560)
+        self._expanded_size = (850, 760)
+        self.setFixedSize(*self._collapsed_size)
 
         icon_path = resource_path("assets/icon.ico")
         if os.path.exists(icon_path):
@@ -65,18 +71,31 @@ class MainWindow(QMainWindow):
 
         self.download_worker = None
         self.info_worker = None
+        self.queue_manager = QueueManager()
+        self._queue_active = False
+        self._current_queue_index = None
+        self._queue_summary = {"finished": 0, "error": 0, "cancelled": 0}
+        self._queue_cancel_requested = False
         self.settings_manager = SettingsManager()
         saved_theme = self.settings_manager.get_theme()
         self.current_settings = self.settings_manager.load()
         self._current_theme = "dark"
         self._yt_dlp_version = None
         self._app_version = None
+        self._tray_close_notice_shown = False
+        self._force_app_quit = False
+        self.tray_manager = None
 
         self.setup_ui()
         self.apply_stylesheet(theme=saved_theme)
+        self.tray_manager = TrayManager(self, resource_path("assets/icon.ico"))
+        if self.tray_manager.available:
+            self.tray_manager.quit_requested.connect(self.on_tray_quit_requested)
+            self.tray_manager.show()
         self.apply_loaded_settings()
         self.update_system_info()
         self.update_output_indicator()
+        self._update_download_button_text()
 
     def setup_ui(self):
         control_height = 40
@@ -251,6 +270,13 @@ class MainWindow(QMainWindow):
         folder_layout.addWidget(self.btn_change_folder)
         layout.addLayout(folder_layout)
 
+        # Queue
+        self.queue_widget = QueueWidget(self.queue_manager)
+        self.queue_widget.queue_changed.connect(self.on_queue_changed)
+        self.queue_widget.expanded_changed.connect(self.on_queue_expanded_changed)
+        self.queue_widget.clear_all_requested.connect(self.on_clear_queue_requested)
+        layout.addWidget(self.queue_widget)
+
         # Status
         self.lbl_system_info = QLabel("Loading info...")
         self.lbl_system_info.setObjectName("SystemInfoLabel")
@@ -274,6 +300,11 @@ class MainWindow(QMainWindow):
 
         # Buttons
         btn_layout = QHBoxLayout()
+        self.btn_add_queue = QPushButton("ADD TO QUEUE")
+        self.btn_add_queue.setMinimumHeight(50)
+        self.btn_add_queue.setStyleSheet("background-color: #3a587e; color: white; font-weight: 600; font-size: 13px; border-radius: 6px;")
+        self.btn_add_queue.clicked.connect(self.add_to_queue)
+
         self.btn_download = QPushButton("DOWNLOAD")
         self.btn_download.setMinimumHeight(50)
         self.btn_download.setStyleSheet("background-color: #2f8a3a; color: white; font-weight: 600; font-size: 13px; border-radius: 6px;")
@@ -286,7 +317,8 @@ class MainWindow(QMainWindow):
         self.btn_cancel.clicked.connect(self.cancel_download)
         self.btn_cancel.setEnabled(False)
 
-        btn_layout.addWidget(self.btn_download, 3)
+        btn_layout.addWidget(self.btn_add_queue, 2)
+        btn_layout.addWidget(self.btn_download, 2)
         btn_layout.addWidget(self.btn_cancel, 1)
         layout.addLayout(btn_layout)
 
@@ -345,9 +377,21 @@ class MainWindow(QMainWindow):
             QLabel#StatusLabel {{ color: {muted_text}; }}
         """
         self.setStyleSheet(stylesheet)
+        if hasattr(self, 'queue_widget'):
+            self.queue_widget.set_theme(theme or self.settings_manager.get_theme())
 
     def on_url_change(self):
         self.fetch_timer.start(350)
+        self._update_download_button_text()
+
+    def _is_tray_notification_enabled_and_hidden(self):
+        tray_enabled = self.settings_manager.get_tray_notifications()
+        hidden = self.isHidden() or (not self.isVisible())
+        return tray_enabled and hidden and self.tray_manager is not None and self.tray_manager.available
+
+    def _get_active_download_title(self):
+        title = str((self.video_info or {}).get("title") or "").strip()
+        return title or "Download"
 
     def start_status_animation(self, base_text):
         self._status_anim_base = base_text.rstrip(". ")
@@ -370,6 +414,9 @@ class MainWindow(QMainWindow):
         self._status_anim_step += 1
 
     def start_fetch_info(self):
+        if self.info_worker and self.info_worker.isRunning():
+            return
+
         url = self.url_input.text().strip()
         if not url or (not url.startswith("http") and "www" not in url):
             return
@@ -386,6 +433,7 @@ class MainWindow(QMainWindow):
 
     def on_info_fetched(self, info, formats, subtitle_languages, auto_subtitle_languages):
         self.stop_status_animation()
+        self.info_worker = None
         self.video_info = info
         self.video_formats = formats
         self.subtitle_languages = [
@@ -402,8 +450,23 @@ class MainWindow(QMainWindow):
         self.fetch_btn.setEnabled(True)
         self.update_ui_state()
 
+        if self._queue_active and self._current_queue_index is not None:
+            queue_items = self.queue_manager.get_all()
+            if 0 <= self._current_queue_index < len(queue_items):
+                self._apply_queue_item_options(queue_items[self._current_queue_index])
+            self.queue_manager.update_title(self._current_queue_index, info.get('title') or self.url_input.text().strip())
+            self.queue_widget.refresh_item(self._current_queue_index)
+
+            if self._queue_cancel_requested:
+                self._mark_current_queue_item_cancelled()
+                self.process_queue()
+                return
+
+            self._start_download_for_url(self.url_input.text().strip())
+
     def on_info_error(self, err):
         self.stop_status_animation()
+        self.info_worker = None
         logger.warning("Info fetch error: %s", err)
         self.lbl_status.setText(f"Error: {err[:50]}...")
         self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600; color: #d98787;")
@@ -411,6 +474,14 @@ class MainWindow(QMainWindow):
         self.subtitle_languages = []
         self.auto_subtitle_languages = []
         self.set_subtitle_options([], [])
+        self._update_download_button_text()
+
+        if self._queue_active and self._current_queue_index is not None:
+            self.queue_manager.update_status(self._current_queue_index, "error", err)
+            self.queue_widget.refresh_item(self._current_queue_index)
+            self._queue_summary["error"] += 1
+            self._current_queue_index = None
+            self.process_queue()
 
     def set_subtitle_options(self, subtitle_languages, auto_subtitle_languages=None):
         if auto_subtitle_languages is None:
@@ -495,6 +566,7 @@ class MainWindow(QMainWindow):
         self.cb_format.blockSignals(False)
         self.cb_fps.blockSignals(False)
         self.cb_quality.blockSignals(False)
+        self._update_download_button_text()
         self.update_output_indicator()
 
     def populate_video_formats(self):
@@ -710,7 +782,18 @@ class MainWindow(QMainWindow):
             postprocessors.append({'key': 'FFmpegMetadata'})
 
         ydl_opts['postprocessors'] = postprocessors
-        return target_ext, None
+        file_name_suffix = self._build_audio_file_name_suffix(target_ext, bitrate)
+        return target_ext, file_name_suffix
+
+    def _build_audio_file_name_suffix(self, target_ext, bitrate):
+        parts = []
+        if target_ext:
+            parts.append(str(target_ext).lower())
+        if bitrate:
+            parts.append(f"{bitrate}kbps")
+        if not parts:
+            return None
+        return f"[{' '.join(parts)}]"
 
     def _find_selected_video_format(self, selected_id):
         if selected_id is None:
@@ -817,9 +900,25 @@ class MainWindow(QMainWindow):
         return target_ext, file_name_suffix
 
     def start_download(self):
-        url = self.url_input.text().strip()
+        if self.download_worker or self.info_worker:
+            return
+
+        if self.queue_manager.count_pending() > 0 and not self._queue_active:
+            self.process_queue()
+            return
+
+        self._start_download_for_url(self.url_input.text().strip())
+
+    def _start_download_for_url(self, url):
+        url = (url or "").strip()
         if not url:
             return
+
+        if self.tray_manager and self.tray_manager.available:
+            if self._queue_active:
+                self.tray_manager.set_status_queue(self.queue_manager.count_pending())
+            else:
+                self.tray_manager.set_status_downloading(self._get_active_download_title())
 
         is_audio = self.rb_audio.isChecked()
         playlist_mode = self.cb_download_playlist.isChecked()
@@ -850,6 +949,7 @@ class MainWindow(QMainWindow):
         self.btn_download.setEnabled(False)
         self.btn_cancel.setEnabled(True)
         self.btn_settings.setEnabled(False)
+        self.btn_add_queue.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600; color: #b8c2d1;")
@@ -868,9 +968,14 @@ class MainWindow(QMainWindow):
         self.download_worker.finished_signal.connect(self.on_download_finished)
         self.download_worker.error_signal.connect(self.on_download_error)
         self.download_worker.start()
+        self._update_download_button_text()
 
     def update_progress(self, percent, text):
         self.progress_bar.setValue(int(percent))
+        if self._queue_active and self._current_queue_index is not None:
+            self.queue_manager.update_progress(self._current_queue_index, percent)
+            self.queue_widget.refresh_item(self._current_queue_index)
+
         if text == "Processing / Converting...":
             self.start_status_animation("Processing / Converting")
             return
@@ -881,27 +986,91 @@ class MainWindow(QMainWindow):
     def on_download_finished(self, msg):
         self.stop_status_animation()
         logger.info("Download finished: %s", msg)
-        self.lbl_status.setText(msg)
+        notification_title = self._get_active_download_title()
+        if self._queue_active and self._current_queue_index is not None:
+            self.queue_manager.update_status(self._current_queue_index, "finished")
+            self.queue_manager.update_progress(self._current_queue_index, 100)
+            self.queue_widget.refresh_item(self._current_queue_index)
+            self._queue_summary["finished"] += 1
+            self._current_queue_index = None
+            self.lbl_status.setText(f"Queue item finished: {msg}")
+        else:
+            self.lbl_status.setText(msg)
         self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600; color: #8fbf8f;")
         self.finish_download_ui()
-        if self.settings_manager.get_show_notifications():
+        if self.settings_manager.get_show_notifications() and not self._queue_active:
             QMessageBox.information(self, "Finished", msg)
+
+        if not self._queue_active:
+            if self._is_tray_notification_enabled_and_hidden():
+                self.tray_manager.notify_download_complete(notification_title)
+            if self.tray_manager and self.tray_manager.available:
+                self.tray_manager.set_status_idle()
+
         self.update_system_info()
+
+        if self._queue_active:
+            if self.tray_manager and self.tray_manager.available:
+                self.tray_manager.set_status_queue(self.queue_manager.count_pending())
+            self.process_queue()
 
     def on_download_error(self, err):
         self.stop_status_animation()
         logger.warning("Download error: %s", err)
-        self.lbl_status.setText(err)
+        notification_title = self._get_active_download_title()
+        if self._queue_active and self._current_queue_index is not None:
+            lowered = (err or "").lower()
+            is_cancel = "cancel" in lowered
+            if is_cancel:
+                self.queue_manager.update_status(self._current_queue_index, "cancelled", err)
+                self._queue_summary["cancelled"] += 1
+            else:
+                self.queue_manager.update_status(self._current_queue_index, "error", err)
+                self._queue_summary["error"] += 1
+            self.queue_widget.refresh_item(self._current_queue_index)
+            self._current_queue_index = None
+            self.lbl_status.setText(f"Queue item failed: {err}")
+        else:
+            self.lbl_status.setText(err)
         self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600; color: #d98787;")
+
+        if self._is_tray_notification_enabled_and_hidden():
+            self.tray_manager.notify_download_error(notification_title, err)
+
         self.finish_download_ui()
+
+        if self._queue_active:
+            if self.tray_manager and self.tray_manager.available:
+                self.tray_manager.set_status_queue(self.queue_manager.count_pending())
+            self.process_queue()
+        elif self.tray_manager and self.tray_manager.available:
+            self.tray_manager.set_status_idle()
 
     def finish_download_ui(self):
         self.btn_download.setEnabled(True)
-        self.btn_cancel.setEnabled(False)
+        self.btn_cancel.setEnabled(self._queue_active and self.queue_manager.count_pending() > 0)
         self.btn_settings.setEnabled(True)
+        self.btn_add_queue.setEnabled(True)
         self.progress_bar.setVisible(False)
+        self.download_worker = None
+        self.info_worker = None
+        self._update_download_button_text()
 
     def cancel_download(self):
+        shift_pressed = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)
+
+        if self._queue_active:
+            self._queue_cancel_requested = True
+            if shift_pressed:
+                self._cancel_all_pending_queue_items()
+
+            if self.download_worker:
+                self.download_worker.cancel()
+            elif self.info_worker and self.info_worker.isRunning():
+                self._mark_current_queue_item_cancelled()
+                self.process_queue()
+            return
+
         if self.download_worker:
             self.download_worker.cancel()
 
@@ -972,4 +1141,303 @@ class MainWindow(QMainWindow):
                 subprocess.Popen(["open", self.download_folder])
             else:
                 subprocess.Popen(["xdg-open", self.download_folder])
+
+    def add_to_queue(self):
+        url = self.url_input.text().strip()
+        if not url:
+            return
+
+        mode = "Audio" if self.rb_audio.isChecked() else "Video"
+        options = self._capture_queue_item_options()
+        index = self.queue_widget.add_item(url, mode, options=options)
+
+        known_title = self._get_known_title_for_url(url)
+        if known_title:
+            self.queue_manager.update_title(index, known_title)
+            self.queue_widget.refresh_item(index)
+
+        self.lbl_status.setText("Added to queue.")
+        self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600; color: #9cc06b;")
+        self._update_download_button_text()
+
+    def _normalize_url_for_match(self, url):
+        value = str(url or "").strip()
+        if value.endswith("/"):
+            value = value[:-1]
+        return value
+
+    def _get_known_title_for_url(self, url):
+        info = self.video_info or {}
+        title = str(info.get("title") or "").strip()
+        if not title:
+            return None
+
+        normalized_url = self._normalize_url_for_match(url)
+        candidates = [
+            info.get("webpage_url"),
+            info.get("original_url"),
+            self.url_input.text().strip(),
+        ]
+
+        normalized_candidates = {
+            self._normalize_url_for_match(candidate)
+            for candidate in candidates
+            if candidate
+        }
+
+        if normalized_url in normalized_candidates:
+            return title
+        return None
+
+    def on_queue_changed(self):
+        self._update_download_button_text()
+        if self._queue_active and self.tray_manager and self.tray_manager.available:
+            self.tray_manager.set_status_queue(self.queue_manager.count_pending())
+
+    def on_queue_expanded_changed(self, expanded):
+        if expanded:
+            self.setFixedSize(*self._expanded_size)
+        else:
+            self.setFixedSize(*self._collapsed_size)
+
+    def on_clear_queue_requested(self):
+        total_items = len(self.queue_manager.get_all())
+        if total_items == 0:
+            return
+
+        reply = QMessageBox.warning(
+            self,
+            "Clear queue",
+            "This will remove all queued items, including unfinished downloads. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        if self._queue_active:
+            self._queue_active = False
+            self._queue_cancel_requested = True
+            self._current_queue_index = None
+            self._queue_summary = {"finished": 0, "error": 0, "cancelled": 0}
+
+            if self.download_worker:
+                self.download_worker.cancel()
+
+        cleared = self.queue_manager.clear_all()
+        if cleared:
+            self.queue_widget.refresh()
+            self.on_queue_changed()
+            self.lbl_status.setText("Queue cleared.")
+            self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600; color: #b8c2d1;")
+            if self.tray_manager and self.tray_manager.available:
+                self.tray_manager.set_status_idle()
+
+    def on_tray_quit_requested(self):
+        self._force_app_quit = True
+        self._queue_active = False
+        self._queue_cancel_requested = True
+        if self.download_worker:
+            self.download_worker.cancel()
+        if self.tray_manager:
+            self.tray_manager.shutdown()
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        tray_available = bool(self.tray_manager and self.tray_manager.available and QSystemTrayIcon.isSystemTrayAvailable())
+        minimize_to_tray = self.settings_manager.get_minimize_to_tray()
+
+        if self._force_app_quit:
+            if self.tray_manager:
+                self.tray_manager.shutdown()
+            event.accept()
+            return
+
+        if minimize_to_tray and tray_available:
+            event.ignore()
+            self.hide()
+            if not self._tray_close_notice_shown:
+                self.tray_manager.tray_icon.showMessage(
+                    "Media Downloader",
+                    "Media Downloader is still running in the system tray.",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    4000,
+                )
+                self._tray_close_notice_shown = True
+            return
+
+        self._force_app_quit = True
+        if self.tray_manager:
+            self.tray_manager.shutdown()
+        event.accept()
+        QApplication.quit()
+
+    def _cancel_all_pending_queue_items(self):
+        for item in self.queue_manager.get_all():
+            if item["status"] == "pending":
+                item["status"] = "cancelled"
+                self._queue_summary["cancelled"] += 1
+        self.queue_widget.refresh()
+
+    def _mark_current_queue_item_cancelled(self):
+        if self._current_queue_index is None:
+            return
+        self.queue_manager.update_status(self._current_queue_index, "cancelled", "Cancelled by user")
+        self.queue_widget.refresh_item(self._current_queue_index)
+        self._queue_summary["cancelled"] += 1
+        self._current_queue_index = None
+        self._queue_cancel_requested = False
+
+    def process_queue(self):
+        if self.download_worker or self.info_worker:
+            return
+
+        if not self._queue_active:
+            self._queue_active = True
+            self._queue_summary = {"finished": 0, "error": 0, "cancelled": 0}
+
+        next_index, item = self.queue_manager.get_next_pending()
+        if item is None:
+            self._queue_active = False
+            self._current_queue_index = None
+            self._queue_cancel_requested = False
+            done = self._queue_summary["finished"]
+            failed = self._queue_summary["error"]
+            cancelled = self._queue_summary["cancelled"]
+            summary_text = f"Queue finished: {done} completed, {failed} failed, {cancelled} cancelled."
+            self.lbl_status.setText(summary_text)
+            self.lbl_status.setStyleSheet("font-size: 15px; font-weight: 600; color: #b8c2d1;")
+            self.btn_cancel.setEnabled(False)
+
+            if self._is_tray_notification_enabled_and_hidden():
+                self.tray_manager.notify_queue_complete(done, failed, cancelled)
+            if self.tray_manager and self.tray_manager.available:
+                self.tray_manager.set_status_idle()
+
+            self._update_download_button_text()
+            return
+
+        self._current_queue_index = next_index
+        self._queue_cancel_requested = False
+        self.queue_manager.update_status(next_index, "downloading")
+        self.queue_manager.update_progress(next_index, 0)
+        self.queue_widget.refresh_item(next_index)
+
+        self.url_input.setText(item["url"])
+        if item.get("mode", "Video").lower() == "audio":
+            self.rb_audio.setChecked(True)
+        else:
+            self.rb_video.setChecked(True)
+        self.update_ui_state()
+
+        self.btn_cancel.setEnabled(True)
+        self.btn_cancel.setText("CANCEL (Shift=All)")
+        if self.tray_manager and self.tray_manager.available:
+            self.tray_manager.set_status_queue(self.queue_manager.count_pending())
+        self.start_fetch_info()
+
+    def _update_download_button_text(self):
+        has_pending = self.queue_manager.count_pending() > 0
+        busy = bool(self.download_worker or self.info_worker)
+        if self._queue_active:
+            self.btn_download.setText("QUEUE RUNNING")
+            self.btn_download.setEnabled(False)
+            self.btn_cancel.setText("CANCEL (Shift=All)")
+            return
+
+        self.btn_cancel.setText("CANCEL")
+        if has_pending:
+            self.btn_download.setText("START QUEUE")
+        else:
+            self.btn_download.setText("DOWNLOAD")
+
+        self.btn_download.setEnabled((not busy) and (has_pending or bool(self.url_input.text().strip())))
+
+    def _capture_queue_item_options(self):
+        is_audio = self.rb_audio.isChecked()
+
+        options = {
+            "mode": "Audio" if is_audio else "Video",
+            "playlist": self.cb_download_playlist.isChecked(),
+            "subtitle": self.cb_subtitles.currentData(),
+        }
+
+        if is_audio:
+            options.update(
+                {
+                    "audio_format": self.cb_format.currentText(),
+                    "audio_bitrate": self.cb_quality.currentData(),
+                }
+            )
+        else:
+            options.update(
+                {
+                    "video_format_data": self.cb_format.currentData(),
+                    "video_format_text": self.cb_format.currentText(),
+                    "video_fps": self.cb_fps.currentData(),
+                    "video_quality_text": self.cb_quality.currentText(),
+                }
+            )
+
+        return options
+
+    def _apply_queue_item_options(self, item):
+        options = item.get("options") or {}
+
+        self.cb_download_playlist.setChecked(bool(options.get("playlist", False)))
+
+        mode = str(options.get("mode") or item.get("mode") or "Video").lower()
+        if mode == "audio":
+            self.rb_audio.setChecked(True)
+        else:
+            self.rb_video.setChecked(True)
+
+        self.update_ui_state()
+
+        if self.rb_audio.isChecked():
+            target_format = options.get("audio_format")
+            if target_format:
+                format_index = self.cb_format.findText(str(target_format))
+                if format_index >= 0:
+                    self.cb_format.setCurrentIndex(format_index)
+
+            target_bitrate = options.get("audio_bitrate")
+            if target_bitrate is not None:
+                bitrate_index = self.cb_quality.findData(target_bitrate)
+                if bitrate_index >= 0:
+                    self.cb_quality.setCurrentIndex(bitrate_index)
+            return
+
+        target_format_data = options.get("video_format_data")
+        target_format_text = options.get("video_format_text")
+        format_index = -1
+
+        if target_format_data is not None:
+            format_index = self.cb_format.findData(target_format_data)
+
+        if format_index < 0 and target_format_text:
+            format_index = self.cb_format.findText(str(target_format_text))
+
+        if format_index >= 0:
+            self.cb_format.setCurrentIndex(format_index)
+
+        target_fps = options.get("video_fps")
+        if target_fps is not None:
+            fps_index = self.cb_fps.findData(target_fps)
+            if fps_index >= 0:
+                self.cb_fps.setCurrentIndex(fps_index)
+
+        target_quality_text = options.get("video_quality_text")
+        if target_quality_text:
+            quality_index = self.cb_quality.findText(str(target_quality_text))
+            if quality_index >= 0:
+                self.cb_quality.setCurrentIndex(quality_index)
+
+        target_subtitle = options.get("subtitle")
+        subtitle_index = self.cb_subtitles.findData(target_subtitle)
+        if subtitle_index >= 0:
+            self.cb_subtitles.setCurrentIndex(subtitle_index)
+        else:
+            self.cb_subtitles.setCurrentIndex(0)
 

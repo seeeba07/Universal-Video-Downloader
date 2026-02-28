@@ -10,13 +10,17 @@
 
 - Download videos in available formats and resolutions
 - Extract audio (MP3, M4A, FLAC, OPUS, WAV)
+- Filename suffix tagging for video/audio (and playlist outputs)
 - Choose preferred framerate (if available)
 - ETA in download progress display
 - System info display (FFmpeg status, yt-dlp version, disk space, app version)
 - Customizable save location
 - Subtitle downloading (manual + optional auto-generated subtitles)
 - Playlist downloading support
+- Download queue with per-item status/progress
+- Queue management tools (remove item, clear finished, clear all with warning)
 - Built-in yt-dlp updater
+- Optional system tray integration (minimize to tray, tray menu, tray notifications)
 - Settings dialog for defaults, theme, download behavior, and maintenance actions
 
 ## How to Use
@@ -35,6 +39,14 @@
 4. Select desired **Format** and **Quality**
 5. Click **DOWNLOAD**
 
+### Using the Queue
+
+1. Configure mode/format/quality for the current URL
+2. Click **ADD TO QUEUE** to enqueue with current settings snapshot
+3. Repeat for more links
+4. Click **START QUEUE** to process items sequentially
+5. Use **CANCEL** (or **Shift + Cancel**) to stop current/all pending queue items
+
 ### Settings Explained
 
 - Click the **?** button to see what each function does.
@@ -46,6 +58,8 @@
   - Completion notification toggle
   - Download speed limit (KB/s)
   - Include auto-generated subtitles
+  - Minimize to tray on close
+  - Tray notifications on download/queue events
   - Maintenance tools: update yt-dlp, open/clear logs
 
 ### Data & Logs

@@ -19,6 +19,8 @@ class SettingsManager:
     KEY_SHOW_NOTIFICATIONS = "downloads/show_notifications"
     KEY_SPEED_LIMIT = "downloads/speed_limit"
     KEY_INCLUDE_AUTO_SUBS = "subtitles/include_auto_generated"
+    KEY_MINIMIZE_TO_TRAY = "system_tray/minimize_to_tray"
+    KEY_TRAY_NOTIFICATIONS = "system_tray/tray_notifications"
 
     DEFAULTS = {
         KEY_DEFAULT_FOLDER: str(Path.home() / "Downloads"),
@@ -30,6 +32,8 @@ class SettingsManager:
         KEY_SHOW_NOTIFICATIONS: True,
         KEY_SPEED_LIMIT: 0,
         KEY_INCLUDE_AUTO_SUBS: False,
+        KEY_MINIMIZE_TO_TRAY: True,
+        KEY_TRAY_NOTIFICATIONS: True,
     }
 
     def __init__(self):
@@ -47,6 +51,8 @@ class SettingsManager:
             self.KEY_SHOW_NOTIFICATIONS: self.get_show_notifications(),
             self.KEY_SPEED_LIMIT: self.get_speed_limit(),
             self.KEY_INCLUDE_AUTO_SUBS: self.get_include_auto_subs(),
+            self.KEY_MINIMIZE_TO_TRAY: self.get_minimize_to_tray(),
+            self.KEY_TRAY_NOTIFICATIONS: self.get_tray_notifications(),
         }
 
     def save(self, settings_dict):
@@ -122,3 +128,15 @@ class SettingsManager:
 
     def set_include_auto_subs(self, enabled):
         self._settings.setValue(self.KEY_INCLUDE_AUTO_SUBS, bool(enabled))
+
+    def get_minimize_to_tray(self):
+        return self._settings.value(self.KEY_MINIMIZE_TO_TRAY, self.DEFAULTS[self.KEY_MINIMIZE_TO_TRAY], type=bool)
+
+    def set_minimize_to_tray(self, value):
+        self._settings.setValue(self.KEY_MINIMIZE_TO_TRAY, bool(value))
+
+    def get_tray_notifications(self):
+        return self._settings.value(self.KEY_TRAY_NOTIFICATIONS, self.DEFAULTS[self.KEY_TRAY_NOTIFICATIONS], type=bool)
+
+    def set_tray_notifications(self, value):
+        self._settings.setValue(self.KEY_TRAY_NOTIFICATIONS, bool(value))

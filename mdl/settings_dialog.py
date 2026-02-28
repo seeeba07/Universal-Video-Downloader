@@ -37,7 +37,7 @@ class SettingsDialog(QDialog):
         self.current_theme = current_theme
 
         self.setWindowTitle("Settings")
-        self.setFixedSize(700, 700)
+        self.setFixedSize(740, 760)
         self.setModal(True)
 
         icon_path = resource_path("assets/icon.ico")
@@ -55,10 +55,13 @@ class SettingsDialog(QDialog):
 
         general_box = QGroupBox("General")
         general_layout = QGridLayout(general_box)
-        general_layout.setHorizontalSpacing(14)
-        general_layout.setVerticalSpacing(10)
-        general_layout.setContentsMargins(12, 18, 12, 12)
-        general_layout.setColumnMinimumWidth(0, 180)
+        general_layout.setHorizontalSpacing(20)
+        general_layout.setVerticalSpacing(12)
+        general_layout.setContentsMargins(14, 18, 14, 14)
+        general_layout.setColumnMinimumWidth(0, 240)
+        general_layout.setColumnMinimumWidth(1, 420)
+        general_layout.setColumnMinimumWidth(2, 120)
+        general_layout.setColumnStretch(1, 1)
 
         lbl_theme = QLabel("Theme")
         general_layout.addWidget(lbl_theme, 0, 0)
@@ -67,35 +70,34 @@ class SettingsDialog(QDialog):
         self.cb_theme.addItem("Dark", "dark")
         self.cb_theme.addItem("Light", "light")
         self.cb_theme.setMinimumHeight(34)
-        general_layout.addWidget(self.cb_theme, 0, 1)
+        general_layout.addWidget(self.cb_theme, 0, 1, 1, 2)
 
         lbl_default_folder = QLabel("Default download folder")
         general_layout.addWidget(lbl_default_folder, 1, 0)
 
-        folder_row = QHBoxLayout()
         self.input_default_folder = QLineEdit()
         self.input_default_folder.setReadOnly(True)
         self.input_default_folder.setMinimumHeight(34)
         btn_browse = QPushButton("Browse")
-        btn_browse.setFixedWidth(100)
+        btn_browse.setFixedWidth(120)
+        btn_browse.setMinimumHeight(34)
         btn_browse.clicked.connect(self._browse_default_folder)
-        folder_row.addWidget(self.input_default_folder, 1)
-        folder_row.addWidget(btn_browse)
-        general_layout.addLayout(folder_row, 1, 1)
+        general_layout.addWidget(self.input_default_folder, 1, 1)
+        general_layout.addWidget(btn_browse, 1, 2)
 
         lbl_default_mode = QLabel("Default mode")
         general_layout.addWidget(lbl_default_mode, 2, 0)
         self.cb_default_mode = QComboBox()
         self.cb_default_mode.addItems(["Video", "Audio"])
         self.cb_default_mode.setMinimumHeight(34)
-        general_layout.addWidget(self.cb_default_mode, 2, 1)
+        general_layout.addWidget(self.cb_default_mode, 2, 1, 1, 2)
 
         lbl_audio_format = QLabel("Default audio format")
         general_layout.addWidget(lbl_audio_format, 3, 0)
         self.cb_audio_format = QComboBox()
         self.cb_audio_format.addItems(["mp3", "m4a", "wav", "flac", "opus"])
         self.cb_audio_format.setMinimumHeight(34)
-        general_layout.addWidget(self.cb_audio_format, 3, 1)
+        general_layout.addWidget(self.cb_audio_format, 3, 1, 1, 2)
 
         lbl_audio_bitrate = QLabel("Default audio bitrate")
         general_layout.addWidget(lbl_audio_bitrate, 4, 0)
@@ -106,8 +108,7 @@ class SettingsDialog(QDialog):
         self.cb_audio_bitrate.addItem("128 kbps", "128")
         self.cb_audio_bitrate.addItem("64 kbps", "64")
         self.cb_audio_bitrate.setMinimumHeight(34)
-        general_layout.addWidget(self.cb_audio_bitrate, 4, 1)
-        general_layout.setColumnStretch(1, 1)
+        general_layout.addWidget(self.cb_audio_bitrate, 4, 1, 1, 2)
 
         downloads_box = QGroupBox("Downloads")
         downloads_layout = QVBoxLayout(downloads_box)
@@ -126,6 +127,19 @@ class SettingsDialog(QDialog):
         downloads_layout.addWidget(self.chk_clipboard_autopaste)
         downloads_layout.addWidget(self.chk_show_notifications)
         downloads_layout.addLayout(speed_row)
+
+        tray_box = QGroupBox("System Tray")
+        tray_layout = QVBoxLayout(tray_box)
+        tray_layout.setSpacing(8)
+        self.chk_minimize_to_tray = QCheckBox("Minimize to tray on close")
+        self.chk_minimize_to_tray.setToolTip(
+            "When enabled, closing the window minimizes to system tray instead of quitting. "
+            "Use Quit from the tray menu to fully exit."
+        )
+        self.chk_tray_notifications = QCheckBox("Show tray notifications")
+        self.chk_tray_notifications.setToolTip("Show system notifications when downloads complete or fail.")
+        tray_layout.addWidget(self.chk_minimize_to_tray)
+        tray_layout.addWidget(self.chk_tray_notifications)
 
         subtitles_box = QGroupBox("Subtitles")
         subtitles_layout = QVBoxLayout(subtitles_box)
@@ -160,6 +174,7 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(general_box)
         layout.addWidget(downloads_box)
+        layout.addWidget(tray_box)
         layout.addWidget(subtitles_box)
         layout.addWidget(maintenance_box)
 
@@ -233,6 +248,8 @@ class SettingsDialog(QDialog):
         self.chk_clipboard_autopaste.setChecked(values[SettingsManager.KEY_CLIPBOARD_AUTOPASTE])
         self.chk_show_notifications.setChecked(values[SettingsManager.KEY_SHOW_NOTIFICATIONS])
         self.spin_speed_limit.setValue(values[SettingsManager.KEY_SPEED_LIMIT])
+        self.chk_minimize_to_tray.setChecked(values[SettingsManager.KEY_MINIMIZE_TO_TRAY])
+        self.chk_tray_notifications.setChecked(values[SettingsManager.KEY_TRAY_NOTIFICATIONS])
         self.chk_include_auto_subs.setChecked(values[SettingsManager.KEY_INCLUDE_AUTO_SUBS])
 
     def _browse_default_folder(self):
@@ -317,6 +334,8 @@ class SettingsDialog(QDialog):
             SettingsManager.KEY_CLIPBOARD_AUTOPASTE: self.chk_clipboard_autopaste.isChecked(),
             SettingsManager.KEY_SHOW_NOTIFICATIONS: self.chk_show_notifications.isChecked(),
             SettingsManager.KEY_SPEED_LIMIT: self.spin_speed_limit.value(),
+            SettingsManager.KEY_MINIMIZE_TO_TRAY: self.chk_minimize_to_tray.isChecked(),
+            SettingsManager.KEY_TRAY_NOTIFICATIONS: self.chk_tray_notifications.isChecked(),
             SettingsManager.KEY_INCLUDE_AUTO_SUBS: self.chk_include_auto_subs.isChecked(),
         }
         self.settings_manager.save(settings_dict)
